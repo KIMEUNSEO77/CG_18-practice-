@@ -21,6 +21,7 @@ enum MovePhase { PHASE_NONE, PHASE_UPDOWN, PHASE_SIDE, PHASE_DONE };
 MovePhase movePhase = PHASE_NONE;
 float moveProgress = 0.0f; // 0~1
 bool moveRepeat = false;   // 반복 여부
+int moveDir = 1;  // 1이면 처음 방향, -1이면 반대 방향
 
 // --- GLU 원뿔용 쿼드릭 핸들 ---
 GLUquadric* gQuadric = nullptr;
@@ -418,8 +419,10 @@ void Timer(int value)
 				moveProgress = 1.0f;
 				movePhase = PHASE_SIDE;
 			}
-			moveY_1 = 0.5f * moveProgress;
-			moveY_2 = -0.5f * moveProgress;
+
+			// 방향에 따라 위/아래 뒤집힘
+			moveY_1 = 0.5f * moveProgress * moveDir;
+			moveY_2 = -0.5f * moveProgress * moveDir;
 		}
 		else if (movePhase == PHASE_SIDE)
 		{
@@ -429,18 +432,22 @@ void Timer(int value)
 				moveProgress = 0.0f;
 				movePhase = PHASE_DONE;
 			}
-			moveX_1 = (coneCenter.x - cubeCenter.x) * (1.0f - moveProgress);
-			moveY_1 = 0.5f;
-			moveX_2 = (cubeCenter.x - coneCenter.x) * (1.0f - moveProgress);
-			moveY_2 = -0.5f;
+
+			float dx = (coneCenter.x - cubeCenter.x);
+
+			// 방향에 따라 좌/우도 뒤집히게
+			moveX_1 = dx * (1.0f - moveProgress) * moveDir;
+			moveY_1 = 0.5f * moveDir;
+
+			moveX_2 = -dx * (1.0f - moveProgress) * moveDir;
+			moveY_2 = -0.5f * moveDir;
 		}
 		else if (movePhase == PHASE_DONE)
 		{
-			moveX_1 = coneCenter.x - cubeCenter.x;
-			moveY_1 = 0.5f;
-			moveX_2 = cubeCenter.x - coneCenter.x;
-			moveY_2 = -0.5f;
-			// 반복: 다음 단계로 이동
+			// 한 사이클(업다운 + 옆으로) 끝났으니까 방향 반전
+			moveDir *= -1;
+
+			// 다음 사이클 시작 준비
 			movePhase = PHASE_UPDOWN;
 			moveProgress = 0.0f;
 		}
@@ -485,6 +492,7 @@ void Reset()
 	movePhase = PHASE_NONE;
 	moveProgress = 0.0f;
 	moveRepeat = false;
+	moveDir = 1;
 
 	glutPostRedisplay();
 }
