@@ -107,6 +107,8 @@ glm::vec3 coneTarget = coneCenter;
 bool animationV1 = false;   // 사각형이 작아지며 자전, 원뿔이 커지며 공전
 bool animationV2 = false;   // 사각형이 커지며 공전, 원뿔이 작아지며 자전
 
+bool changeShape = false; // 도형 바꾸기
+
 void InitAxis()
 {
 	glGenVertexArrays(1, &axisVAO);
@@ -447,6 +449,7 @@ void Reset()
 	cubeTarget = cubeCenter; coneTarget = coneCenter;
 
 	animationV1 = false; animationV2 = false;
+	changeShape = false;
 
 	glutPostRedisplay();
 }
@@ -492,6 +495,11 @@ GLvoid Keyboard(unsigned char key, int x, int y)
 		break;
 	case 'V':
 		animationV2 = !animationV2; dirS_1 = -1; dirS_2 = +1; animationV1 = false;
+		break;
+	case 'u': // 두 도형이 한 개는 위로, 한 개는 아래로 이동
+		break;
+	case 'c': // 두 도형을 다른 도형으로 바꾸기
+		changeShape = !changeShape; glutPostRedisplay();
 		break;
 	case 's': Reset(); break;
 	case 'q': exit(0); break;
@@ -640,6 +648,87 @@ GLvoid DrawCone(GLuint shaderProgramID)
 		(GLint)8);       // 세로 분할
 }
 
+// 구 그리는 함수
+GLvoid DrawSphere(GLuint shaderProgramID)
+{
+	if (!gQuadric) return;
+
+	glm::mat4 M(1.0f);
+
+	if (rotatingCenter || animationV2)
+		M = glm::rotate(M, glm::radians(angleC_1), glm::vec3(0, 1, 0));
+
+	if (scalingCenter && (objectMode == 0 || objectMode == -1))
+		M = glm::scale(M, glm::vec3(curScale_1, curScale_1, curScale_1));
+
+	glm::mat4 viewRot = glm::rotate(glm::mat4(1.0f), glm::radians(30.0f), glm::vec3(0, 1, 0));
+	viewRot = glm::rotate(viewRot, glm::radians(-30.0f), glm::vec3(1, 0, 0));
+
+	glm::mat3 camRot = glm::mat3(glm::inverse(viewRot));
+	glm::vec3 screenX = glm::normalize(camRot[0]);
+	glm::vec3 screenY = glm::normalize(camRot[1]);
+
+	M = glm::translate(M, screenX * moveX_1 + screenY * moveY_1);
+
+	M = glm::translate(M, cubeCenter);
+	M = glm::rotate(M, glm::radians(angleY_1), glm::vec3(0, 1, 0));
+	M = glm::rotate(M, glm::radians(angleX_1), glm::vec3(1, 0, 0));
+
+	M = glm::scale(M, glm::vec3(curScale_1, curScale_1, curScale_1));
+
+	GLint modelLoc = glGetUniformLocation(shaderProgramID, "uModel");
+	GLint colorLoc = glGetUniformLocation(shaderProgramID, "uColor");
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &M[0][0]);
+	glUniform3f(colorLoc, 1.0f, 1.0f, 0.0f); 
+
+	gluSphere(gQuadric,
+		(GLdouble)0.15,   // 반지름
+		(GLint)20,        // 세로 분할
+		(GLint)20);       // 가로 분할
+}
+
+// 원기둥 그리는 함수
+GLvoid DrawCylinder(GLuint shaderProgramID)
+{
+	if (!gQuadric) return;
+
+	glm::mat4 M(1.0f);
+
+	if (rotatingCenter || animationV1)
+		M = glm::rotate(M, glm::radians(angleC_2), glm::vec3(0, 1, 0));
+
+	if (scalingCenter && (objectMode == 0 || objectMode == 1))
+		M = glm::scale(M, glm::vec3(curScale_2, curScale_2, curScale_2));
+
+
+	glm::mat4 viewRot = glm::rotate(glm::mat4(1.0f), glm::radians(30.0f), glm::vec3(0, 1, 0));
+	viewRot = glm::rotate(viewRot, glm::radians(-30.0f), glm::vec3(1, 0, 0));
+
+	glm::mat3 camRot = glm::mat3(glm::inverse(viewRot));
+	glm::vec3 screenX = glm::normalize(camRot[0]);
+	glm::vec3 screenY = glm::normalize(camRot[1]);
+
+	M = glm::translate(M, screenX * moveX_2 + screenY * moveY_2);
+
+	M = glm::translate(M, coneCenter);
+	M = glm::rotate(M, glm::radians(angleY_2), glm::vec3(0, 1, 0));
+	M = glm::rotate(M, glm::radians(angleX_2), glm::vec3(1, 0, 0));
+
+	M = glm::scale(M, glm::vec3(curScale_2, curScale_2, curScale_2));
+
+	GLint modelLoc = glGetUniformLocation(shaderProgramID, "uModel");
+	GLint colorLoc = glGetUniformLocation(shaderProgramID, "uColor");   // 색깔
+	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &M[0][0]);
+	glUniform3f(colorLoc, 0.0f, 1.0f, 0.0f);  // 노란색
+
+	gluCylinder(gQuadric,
+		(GLdouble)0.1,   // 밑면 반지름
+		0.1,             // 윗면 반지름
+		(GLdouble)0.3,   // 높이
+		(GLint)20,       // 둘레 분할
+		(GLint)8);       // 세로 분할
+}
+
 
 GLvoid drawScene()
 {
@@ -648,15 +737,41 @@ GLvoid drawScene()
 
 	glUseProgram(shaderProgramID);
 
-	DrawAxis(shaderProgramID); // 축 그리기	
-	DrawCube(shaderProgramID); // 정육면체 그리기
+	GLint viewLoc = glGetUniformLocation(shaderProgramID, "view");
+	GLint projLoc = glGetUniformLocation(shaderProgramID, "projection");
 
-	DrawCone(shaderProgramID);   // 원뿔 그리기
+	glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 2.0f);
+	glm::vec3 cameraDirection = glm::vec3(0.0f, 0.0f, 0.0f);
+	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+	glm::mat4 vTransform = glm::mat4(1.0f);
+	vTransform = glm::lookAt(cameraPos, cameraDirection, cameraUp);
+	glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &vTransform[0][0]);
+
+	glm::mat4 pTransform = glm::mat4(1.0f);
+	pTransform = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
+	glUniformMatrix4fv(projLoc, 1, GL_FALSE, &pTransform[0][0]);
+
+	DrawAxis(shaderProgramID); // 축 그리기
+
+	if (!changeShape)
+	{
+		DrawCube(shaderProgramID); // 정육면체 그리기
+		DrawCone(shaderProgramID);   // 원뿔 그리기
+	}
+	else
+	{
+		DrawSphere(shaderProgramID); // 구 그리기
+		DrawCylinder(shaderProgramID); // 원기둥 그리기
+	}
 
 	glutSwapBuffers();
 }
 
 GLvoid Reshape(int w, int h)
 {
+	width = w;
+	height = h;
+
 	glViewport(0, 0, w, h);
 }
