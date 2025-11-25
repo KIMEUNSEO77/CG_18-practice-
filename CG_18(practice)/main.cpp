@@ -17,6 +17,11 @@ GLuint make_shaderProgram();
 GLvoid drawScene();
 GLvoid Reshape(int w, int h);
 
+enum MovePhase { PHASE_NONE, PHASE_UPDOWN, PHASE_SIDE, PHASE_DONE };
+MovePhase movePhase = PHASE_NONE;
+float moveProgress = 0.0f; // 0~1
+bool moveRepeat = false;   // 반복 여부
+
 // --- GLU 원뿔용 쿼드릭 핸들 ---
 GLUquadric* gQuadric = nullptr;
 
@@ -179,7 +184,6 @@ void Timer(int value)
 		curScale_2 += dirS_2 * 0.01f;
 		if (curScale_2 >= 1.5f) { curScale_2 = 1.5f; dirS_2 = -1; }
 		else if (curScale_2 <= 0.2f) { curScale_2 = 0.2f; dirS_2 = +1; }
-		glutPostRedisplay();
 	}
 
 	if (animationV2)
@@ -193,7 +197,6 @@ void Timer(int value)
 		curScale_2 += dirS_2 * 0.01f;
 		if (curScale_2 >= 1.5f) { curScale_2 = 1.5f; dirS_2 = -1; }
 		else if (curScale_2 <= 0.2f) { curScale_2 = 0.2f; dirS_2 = +1; }
-		glutPostRedisplay();
 	}
 
 	if (rotatingX)
@@ -219,7 +222,6 @@ void Timer(int value)
 				angleX_1 -= 1.0f; angleX_2 -= 1.0f;
 			}
 		}
-		glutPostRedisplay();
 	}
 	else if (rotatingY)
 	{
@@ -244,7 +246,6 @@ void Timer(int value)
 				angleY_1 -= 1.0f; angleY_2 -= 1.0f;
 			}
 		}
-		glutPostRedisplay();
 	}
 	if (rotatingCenter)
 	{
@@ -269,7 +270,6 @@ void Timer(int value)
 				angleC_1 -= 1.0f; angleC_2 -= 1.0f;
 			}
 		}
-		glutPostRedisplay();
 	}
 	if (scaling)
 	{
@@ -297,7 +297,6 @@ void Timer(int value)
 				curScale_2 = 0.2f; dirS_2 = +1;
 			}
 		}
-		glutPostRedisplay();
 	}
 	if (scalingCenter)
 	{
@@ -312,7 +311,6 @@ void Timer(int value)
 			{
 				curScale_1 = 0.2f; dirS_1 = +1;
 			}
-			glutPostRedisplay();
 		}
 		if (objectMode == 1 || objectMode == 0)
 		{
@@ -325,9 +323,7 @@ void Timer(int value)
 			{
 				curScale_2 = 0.2f; dirS_2 = +1;
 			}
-			glutPostRedisplay();
 		}
-		glutPostRedisplay();
 	}
 	if (translatingX && (objectMode == -1 || objectMode == 0))
 	{
@@ -341,7 +337,6 @@ void Timer(int value)
 		{
 			moveX_1 = -0.7f; dirMoveX_1 = +1;
 		}
-		glutPostRedisplay();
 	}
 	if (translatingX && (objectMode == 1 || objectMode == 0))
 	{
@@ -354,7 +349,6 @@ void Timer(int value)
 		{
 			moveX_2 = -1.0f; dirMoveX_2 = +1;
 		}
-		glutPostRedisplay();
 	}
 
 	if (translatingY && (objectMode == -1 || objectMode == 0))
@@ -368,7 +362,6 @@ void Timer(int value)
 		{
 			moveY_1 = -0.7f; dirMoveY_1 = +1;
 		}
-		glutPostRedisplay();
 	}
 	if (translatingY && (objectMode == 1 || objectMode == 0))
 	{
@@ -381,7 +374,6 @@ void Timer(int value)
 		{
 			moveY_2 = -0.7f; dirMoveY_2 = +1;
 		}
-		glutPostRedisplay();
 	}
 	if (posChange)
 	{
@@ -413,9 +405,48 @@ void Timer(int value)
 			cubeTarget = coneTarget;
 			coneTarget = temp;
 		}
-
-		glutPostRedisplay();
 	}
+
+	// 두 도형 교차 이동 애니메이션
+	if (moveRepeat && movePhase != PHASE_NONE)
+	{
+		if (movePhase == PHASE_UPDOWN)
+		{
+			moveProgress += 0.02f;
+			if (moveProgress >= 1.0f)
+			{
+				moveProgress = 1.0f;
+				movePhase = PHASE_SIDE;
+			}
+			moveY_1 = 0.5f * moveProgress;
+			moveY_2 = -0.5f * moveProgress;
+		}
+		else if (movePhase == PHASE_SIDE)
+		{
+			moveProgress -= 0.02f;
+			if (moveProgress <= 0.0f)
+			{
+				moveProgress = 0.0f;
+				movePhase = PHASE_DONE;
+			}
+			moveX_1 = (coneCenter.x - cubeCenter.x) * (1.0f - moveProgress);
+			moveY_1 = 0.5f;
+			moveX_2 = (cubeCenter.x - coneCenter.x) * (1.0f - moveProgress);
+			moveY_2 = -0.5f;
+		}
+		else if (movePhase == PHASE_DONE)
+		{
+			moveX_1 = coneCenter.x - cubeCenter.x;
+			moveY_1 = 0.5f;
+			moveX_2 = cubeCenter.x - coneCenter.x;
+			moveY_2 = -0.5f;
+			// 반복: 다음 단계로 이동
+			movePhase = PHASE_UPDOWN;
+			moveProgress = 0.0f;
+		}
+	}
+
+	glutPostRedisplay();
 	glutTimerFunc(16, Timer, 0);
 }
 
@@ -450,6 +481,10 @@ void Reset()
 
 	animationV1 = false; animationV2 = false;
 	changeShape = false;
+
+	movePhase = PHASE_NONE;
+	moveProgress = 0.0f;
+	moveRepeat = false;
 
 	glutPostRedisplay();
 }
@@ -497,6 +532,16 @@ GLvoid Keyboard(unsigned char key, int x, int y)
 		animationV2 = !animationV2; dirS_1 = -1; dirS_2 = +1; animationV1 = false;
 		break;
 	case 'u': // 두 도형이 한 개는 위로, 한 개는 아래로 이동
+		moveRepeat = !moveRepeat; // 반복 토글
+		if (moveRepeat) {
+			movePhase = PHASE_UPDOWN;
+			moveProgress = 0.0f;
+		}
+		else {
+			movePhase = PHASE_NONE;
+			moveProgress = 0.0f;
+			moveX_1 = moveX_2 = moveY_1 = moveY_2 = 0.0f; // 위치 초기화
+		}
 		break;
 	case 'c': // 두 도형을 다른 도형으로 바꾸기
 		changeShape = !changeShape; glutPostRedisplay();
