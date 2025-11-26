@@ -23,6 +23,8 @@ float moveProgress = 0.0f; // 0~1
 bool moveRepeat = false;   // 반복 여부
 int moveDir = 1;  // 1이면 처음 방향, -1이면 반대 방향
 
+bool wireMode = false;  // 와이어프레임 모드 여부
+
 // --- GLU 원뿔용 쿼드릭 핸들 ---
 GLUquadric* gQuadric = nullptr;
 
@@ -70,50 +72,41 @@ float cubeColors[8][3] = {
 };
 
 int objectMode = -1;   // -1: left, 0: 둘 다, 1: right
-bool rotatingX = false;
-bool dirX = true; // +1: 시계, -1: 반시계
-float angleX_1 = -30.0f;
-float angleX_2 = -30.0f;
-bool rotatingY = false;
-bool dirY = true; // +1: 시계, -1: 반시계
-float angleY_1 = 30.0f;
-float angleY_2 = 30.0f;
+bool rotatingX = false;  bool dirX = true; // +1: 시계, -1: 반시계
+float angleX_1 = -30.0f; float angleX_2 = -30.0f;
+bool rotatingY = false; bool dirY = true; // +1: 시계, -1: 반시계
+float angleY_1 = 30.0f; float angleY_2 = 30.0f;
 
 bool rotatingCenter = false;  // 중앙 y축 기준 회전
-float angleC_1 = 0.0f;
-float angleC_2 = 0.0f;
-bool dirC = true; // +1: 시계, -1: 반시계
+float angleC_1 = 0.0f; float angleC_2 = 0.0f; bool dirC = true; // +1: 시계, -1: 반시계
 
-float curScale_1 = 1.0f;
-float curScale_2 = 1.0f;
+float curScale_1 = 1.0f; float curScale_2 = 1.0f;
 int dirS_1 = +1;           // +1: 증가, -1: 감소
 int dirS_2 = -1;           // +1: 증가, -1: 감소
-bool scaling = false;
-bool scalingCenter = false;
+bool scaling = false; bool scalingCenter = false;  // 중심 기준 scale
 
-float moveX_1 = 0.0f;
-float moveX_2 = 0.0f;
-float dirMoveX_1 = +1;
-float dirMoveX_2 = -1;
+// x축 서로 이동
 bool translatingX = false;
+float moveX_1 = 0.0f; float moveX_2 = 0.0f;
+float dirMoveX_1 = +1; float dirMoveX_2 = -1;
 
-float moveY_1 = 0.0f;
-float moveY_2 = 0.0f;
-float dirMoveY_1 = +1;
-float dirMoveY_2 = -1;
+// y축 서로 이동
 bool translatingY = false;
+float moveY_1 = 0.0f; float moveY_2 = 0.0f;
+float dirMoveY_1 = +1; float dirMoveY_2 = -1;
 
+// 두 도형 위치 바꾸기
 bool posChange = false;
 glm::vec3 cubeCenter = { -0.375f, 0.125f, -0.125f };
 glm::vec3 coneCenter = { 0.35f, 0.0f, 0.0f };
-
+// 목표 지점(상대방 위치)
 glm::vec3 cubeTarget = cubeCenter;
 glm::vec3 coneTarget = coneCenter;
 
-bool animationV1 = false;   // 사각형이 작아지며 자전, 원뿔이 커지며 공전
-bool animationV2 = false;   // 사각형이 커지며 공전, 원뿔이 작아지며 자전
+bool animationV1 = false;   // 왼쪽 도형이 작아지며 자전, 오른쪽 도형 커지며 공전
+bool animationV2 = false;   // 왼쪽 도형이 커지며 공전, 오른쪽 도형이 작아지며 자전
 
-bool changeShape = false; // 도형 바꾸기
+bool changeShape = false; // 도형 바꾸기(구, 원기둥)
 
 void InitAxis()
 {
@@ -392,7 +385,7 @@ void Timer(int value)
 		moveX_2 = coneWorld.x - coneCenter.x;
 		moveY_2 = coneWorld.y - coneCenter.y;
 
-		// 가까워지면 타겟 변경
+		// 가까워지면 타겟 변경(# include <cmath> 필요)
 		if (fabs(cubeWorld.x - cubeTarget.x) < 0.0005f &&
 			fabs(cubeWorld.y - cubeTarget.y) < 0.0005f &&
 			fabs(coneWorld.x - coneTarget.x) < 0.0005f &&
@@ -528,6 +521,11 @@ GLvoid Keyboard(unsigned char key, int x, int y)
 	case 'e':
 		translatingY = !translatingY; break;
 	case 't':
+		movePhase = PHASE_NONE;
+		moveProgress = 0.0f;
+		moveRepeat = false;
+		moveX_1 = moveX_2 = moveY_1 = moveY_2 = 0.0f; // 위치 초기화
+
 		posChange = !posChange;
 		glm::vec3 temp = cubeTarget;
 		cubeTarget = coneTarget;
@@ -539,13 +537,16 @@ GLvoid Keyboard(unsigned char key, int x, int y)
 	case 'V':
 		animationV2 = !animationV2; dirS_1 = -1; dirS_2 = +1; animationV1 = false;
 		break;
-	case 'u': // 두 도형이 한 개는 위로, 한 개는 아래로 이동
+	case 'u': posChange = false;
+		// 두 도형이 한 개는 위로, 한 개는 아래로 이동
 		moveRepeat = !moveRepeat; // 반복 토글
-		if (moveRepeat) {
+		if (moveRepeat) 
+		{
 			movePhase = PHASE_UPDOWN;
 			moveProgress = 0.0f;
 		}
-		else {
+		else 
+		{
 			movePhase = PHASE_NONE;
 			moveProgress = 0.0f;
 			moveX_1 = moveX_2 = moveY_1 = moveY_2 = 0.0f; // 위치 초기화
@@ -553,6 +554,10 @@ GLvoid Keyboard(unsigned char key, int x, int y)
 		break;
 	case 'c': // 두 도형을 다른 도형으로 바꾸기
 		changeShape = !changeShape; glutPostRedisplay();
+		break;
+	case 'g': // 선으로 그리기
+		wireMode = !wireMode;
+		glutPostRedisplay();
 		break;
 	case 's': Reset(); break;
 	case 'q': exit(0); break;
@@ -572,6 +577,10 @@ void main(int argc, char** argv)
 
 	glEnable(GL_DEPTH_TEST); // 깊이 테스트 활성화
 	gQuadric = gluNewQuadric();  // GLU 쿼드릭 객체 생성
+
+	// 은면 제거
+	glEnable(GL_CULL_FACE);
+	//glCullFace(GL_BACK);   // 뒷면 제거
 
 	InitAxis();   // 축 초기화
 	InitCube();   // 정육면체 초기화
@@ -807,14 +816,27 @@ GLvoid drawScene()
 
 	DrawAxis(shaderProgramID); // 축 그리기
 
+	if (wireMode)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); // 선으로 그리기
+	else
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // 면으로 그
+
 	if (!changeShape)
 	{
+		// 정육면체: 앞면 제거
+		glCullFace(GL_FRONT);
 		DrawCube(shaderProgramID); // 정육면체 그리기
+
+		// 원뿔: 뒷면 제거
+		glCullFace(GL_BACK);
 		DrawCone(shaderProgramID);   // 원뿔 그리기
 	}
 	else
 	{
+		glCullFace(GL_FRONT);
 		DrawSphere(shaderProgramID); // 구 그리기
+
+		glCullFace(GL_BACK);
 		DrawCylinder(shaderProgramID); // 원기둥 그리기
 	}
 
